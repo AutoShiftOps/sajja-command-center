@@ -1,0 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--black:#0a0a0a;--white:#f8f6f2;--gold:#c9a84c;--gold-light:#e8d5a3;--gold-dim:#7a6430;--surface:#141414;--surface2:#1a1a1a;--surface3:#222;--border:#282828;--text:#ccc8c0;--muted:#606060;--green:#4caf7d;--amber:#e8a020;--red:#e05a5a;--blue:#5a9de8;--purple:#9b7fe8;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--black);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+input,select,button{font-family:'Inter',sans-serif;}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
