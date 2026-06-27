@@ -5,14 +5,19 @@ import DMWorkspace from './components/dm/DMWorkspace'
 import { useStore } from './hooks/useStore'
 
 export default function App() {
-  const store = useStore()
-  const { state, saveStatus, setWorkspace, ...actions } = store
+  const { state, dbStatus, dbMessage, setWorkspace, ...actions } = useStore()
 
   return (
-    <Layout workspace={state.workspace} setWorkspace={setWorkspace} streak={state.streak} saveStatus={saveStatus}>
+    <Layout
+      workspace={state.workspace}
+      setWorkspace={setWorkspace}
+      streak={state.streak}
+      dbStatus={dbStatus}
+      dbMessage={dbMessage}
+    >
       {state.workspace === 'eb1a'
-        ? <EB1AWorkspace state={state} actions={actions}/>
-        : <DMWorkspace state={state} actions={actions}/>
+        ? <EB1AWorkspace state={state} actions={actions} />
+        : <DMWorkspace   state={state} actions={actions} />
       }
     </Layout>
   )

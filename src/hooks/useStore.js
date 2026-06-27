@@ -1,82 +1,127 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { loadState, saveState } from '../lib/supabase'
+import { loadState, saveState, configured } from '../lib/supabase'
 
-const DEFAULT_STATE = {
+// ── DB row → app state ───────────────────────────────────────────
+function fromRemote(row) {
+  return {
+    workspace:  row.workspace        || 'eb1a',
+    eb1a: {
+      tasks:    row.eb1a_tasks       || {},
+      evidence: row.eb1a_evidence    || [],
+    },
+    dm: {
+      tasks:    row.dm_tasks         || {},
+      modProg:  row.dm_mod_prog      || {},
+      metrics:  row.dm_metrics       || [],
+    },
+    plan: {
+      doneDays: row.plan_done_days   || {},
+    },
+    streak:     row.streak           || 0,
+    lastVisit:  row.last_visit       || null,
+  }
+}
+
+// ── Bump streak if this is a new day ────────────────────────────
+function withStreak(s) {
+  const today = new Date().toISOString().slice(0, 10)
+  if (s.lastVisit === today) return s
+  const diff = s.lastVisit
+    ? Math.round((new Date(today) - new Date(s.lastVisit)) / 86400000)
+    : 1
+  return { ...s, streak: diff === 1 ? (s.streak || 0) + 1 : 1, lastVisit: today }
+}
+
+// ── Connection status values ─────────────────────────────────────
+// 'loading' | 'connected' | 'not_configured' | 'unreachable'
+// ────────────────────────────────────────────────────────────────
+
+const EMPTY = {
   workspace: 'eb1a',
-  eb1a: { tasks: {}, evidence: [] },
-  dm: { tasks: {}, modProg: {}, metrics: [] },
-  plan: { doneDays: {} },
+  eb1a:  { tasks: {}, evidence: [] },
+  dm:    { tasks: {}, modProg: {}, metrics: [] },
+  plan:  { doneDays: {} },
   streak: 0,
   lastVisit: null,
 }
 
 export function useStore() {
-  const [state, setStateRaw] = useState(DEFAULT_STATE)
-  const [saveStatus, setSaveStatus] = useState('loading')
+  const [state,      setState_]    = useState(EMPTY)
+  const [dbStatus,   setDbStatus]  = useState('loading')   // drives the UI banner
+  const [dbMessage,  setDbMessage] = useState('')
   const debounceRef = useRef(null)
+  const latestState = useRef(EMPTY)
 
+  // Keep ref in sync so the debounced save always uses the latest state
+  useEffect(() => { latestState.current = state }, [state])
+
+  // ── Boot: load from Supabase, nothing else ───────────────────
   useEffect(() => {
-    async function init() {
-      const remote = await loadState()
-      if (remote) {
-        setStateRaw({
-          workspace: remote.workspace || 'eb1a',
-          eb1a: { tasks: remote.eb1a_tasks||{}, evidence: remote.eb1a_evidence||[] },
-          dm: { tasks: remote.dm_tasks||{}, modProg: remote.dm_mod_prog||{}, metrics: remote.dm_metrics||[] },
-          plan: { doneDays: remote.plan_done_days||{} },
-          streak: remote.streak||0,
-          lastVisit: remote.last_visit||null,
-        })
-        setSaveStatus('saved')
-      } else {
-        try {
-          const backup = localStorage.getItem('sajja_cmd_backup')
-          if (backup) setStateRaw(JSON.parse(backup))
-        } catch(e){}
-        setSaveStatus('offline')
+    async function boot() {
+      const result = await loadState()
+
+      if (!result.ok) {
+        setDbStatus(result.reason)           // 'not_configured' | 'unreachable'
+        setDbMessage(result.message || '')
+        // Leave state as EMPTY — user sees the banner and knows why
+        return
       }
-      // Streak update
-      setStateRaw(prev => {
-        const today = new Date().toISOString().slice(0,10)
-        if (prev.lastVisit === today) return prev
-        const diff = prev.lastVisit ? Math.round((new Date(today)-new Date(prev.lastVisit))/86400000) : 1
-        return { ...prev, streak: diff===1?(prev.streak||0)+1:1, lastVisit: today }
-      })
+
+      const loaded = withStreak(fromRemote(result.data))
+      setState_(loaded)
+      latestState.current = loaded
+      setDbStatus('connected')
+
+      // Persist the streak bump back immediately
+      await saveState(loaded)
     }
-    init()
+    boot()
   }, [])
 
+  // ── Debounced save — Supabase only ───────────────────────────
   const persist = useCallback((newState) => {
-    setSaveStatus('saving')
+    setDbStatus('saving')
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
-      const ok = await saveState(newState)
-      setSaveStatus(ok ? 'saved' : 'offline')
-    }, 1500)
+      const result = await saveState(newState)
+      if (result.ok) {
+        setDbStatus('connected')
+        setDbMessage('')
+      } else {
+        setDbStatus(result.reason)
+        setDbMessage(result.message || '')
+      }
+    }, 800)
   }, [])
 
-  const setState = useCallback((updater) => {
-    setStateRaw(prev => {
+  // ── Wrapped setState that always persists ────────────────────
+  const update = useCallback((updater) => {
+    setState_(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
       persist(next)
       return next
     })
   }, [persist])
 
-  const toggleEB1ATask = (id) => setState(s => ({ ...s, eb1a: { ...s.eb1a, tasks: { ...s.eb1a.tasks, [id]: !s.eb1a.tasks[id] } } }))
-  const addEvidence = (item) => setState(s => ({ ...s, eb1a: { ...s.eb1a, evidence: [item,...(s.eb1a.evidence||[])] } }))
-  const deleteEvidence = (i) => setState(s => { const ev=[...(s.eb1a.evidence||[])]; ev.splice(i,1); return {...s,eb1a:{...s.eb1a,evidence:ev}} })
-  const toggleDMTask = (id) => setState(s => ({ ...s, dm: { ...s.dm, tasks: { ...s.dm.tasks, [id]: !s.dm.tasks[id] } } }))
-  const startModule = (id) => setState(s => ({ ...s, dm: { ...s.dm, modProg: { ...s.dm.modProg, [id]: s.dm.modProg[id]||10 } } }))
-  const saveDMMetrics = (entry) => setState(s => ({ ...s, dm: { ...s.dm, metrics: [entry,...(s.dm.metrics||[])].slice(0,12) } }))
-  const setWorkspace = (ws) => setState(s => ({ ...s, workspace: ws }))
-  const markReturn = () => setState(s => ({ ...s, streak: (s.streak||0)+1 }))
-  const resetEB1ATasks = () => setState(s => ({ ...s, eb1a: { ...s.eb1a, tasks: {} } }))
-  const resetDMTasks = () => setState(s => ({ ...s, dm: { ...s.dm, tasks: {} } }))
-  const togglePlanDay = (dayNum) => setState(s => ({
-    ...s,
-    plan: { doneDays: { ...(s.plan?.doneDays||{}), [dayNum]: !(s.plan?.doneDays||{})[dayNum] } }
-  }))
+  // ── Actions ─────────────────────────────────────────────────
+  const toggleEB1ATask  = (id)    => update(s => ({ ...s, eb1a: { ...s.eb1a, tasks:    { ...s.eb1a.tasks,    [id]: !s.eb1a.tasks[id]   } } }))
+  const addEvidence     = (item)  => update(s => ({ ...s, eb1a: { ...s.eb1a, evidence: [item, ...(s.eb1a.evidence||[])]                 } }))
+  const deleteEvidence  = (i)     => update(s => { const ev=[...(s.eb1a.evidence||[])]; ev.splice(i,1); return {...s, eb1a:{...s.eb1a, evidence:ev}} })
+  const toggleDMTask    = (id)    => update(s => ({ ...s, dm:   { ...s.dm,   tasks:    { ...s.dm.tasks,      [id]: !s.dm.tasks[id]     } } }))
+  const startModule     = (id)    => update(s => ({ ...s, dm:   { ...s.dm,   modProg:  { ...s.dm.modProg,    [id]: s.dm.modProg[id]||10} } }))
+  const saveDMMetrics   = (entry) => update(s => ({ ...s, dm:   { ...s.dm,   metrics:  [entry,...(s.dm.metrics||[])].slice(0,12)        } }))
+  const setWorkspace    = (ws)    => update(s => ({ ...s, workspace: ws }))
+  const markReturn      = ()      => update(s => ({ ...s, streak: (s.streak||0) + 1 }))
+  const resetEB1ATasks  = ()      => update(s => ({ ...s, eb1a: { ...s.eb1a, tasks: {} } }))
+  const resetDMTasks    = ()      => update(s => ({ ...s, dm:   { ...s.dm,   tasks: {} } }))
+  const togglePlanDay   = (n)     => update(s => ({ ...s, plan: { doneDays: { ...(s.plan?.doneDays||{}), [n]: !(s.plan?.doneDays||{})[n] } } }))
 
-  return { state, saveStatus, toggleEB1ATask, addEvidence, deleteEvidence, toggleDMTask, startModule, saveDMMetrics, setWorkspace, markReturn, resetEB1ATasks, resetDMTasks, togglePlanDay }
+  return {
+    state, dbStatus, dbMessage,
+    toggleEB1ATask, addEvidence, deleteEvidence,
+    toggleDMTask, startModule, saveDMMetrics,
+    setWorkspace, markReturn,
+    resetEB1ATasks, resetDMTasks,
+    togglePlanDay,
+  }
 }
