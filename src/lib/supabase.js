@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const configured =
@@ -33,17 +33,21 @@ export async function saveState(state) {
     const { error } = await supabase
       .from('command_center')
       .upsert({
-        id:             'sajja_singleton',
-        eb1a_tasks:     state.eb1a?.tasks      || {},
-        eb1a_evidence:  state.eb1a?.evidence   || [],
-        dm_tasks:       state.dm?.tasks         || {},
-        dm_mod_prog:    state.dm?.modProg       || {},
-        dm_metrics:     state.dm?.metrics       || [],
-        plan_done_days: state.plan?.doneDays    || {},
-        streak:         state.streak            || 0,
-        last_visit:     state.lastVisit         || null,
-        workspace:      state.workspace         || 'eb1a',
-        updated_at:     new Date().toISOString(),
+        id: 'sajja_singleton',
+        eb1a_tasks: state.eb1a?.tasks || {},
+        eb1a_evidence: state.eb1a?.evidence || [],
+        dm_tasks: state.dm?.tasks || {},
+        dm_mod_prog: state.dm?.modProg || {},
+        dm_metrics: state.dm?.metrics || [],
+        plan_done_days: state.plan?.doneDays || {},
+        french_tasks: state.french?.tasks || {},
+        french_sessions: state.french?.sessions || [],
+        french_plan_days: state.french?.planDays || [],
+        french_vocab_count: state.french?.vocabCount || 0,
+        streak: state.streak || 0,
+        last_visit: state.lastVisit || null,
+        workspace: state.workspace || 'eb1a',
+        updated_at: new Date().toISOString(),
       })
     if (error) throw error
     return { ok: true }
