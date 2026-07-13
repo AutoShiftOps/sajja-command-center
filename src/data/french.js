@@ -51,7 +51,7 @@ export async function saveState(state) {
         return { ok: false, reason: 'unreachable', message: err.message }
     }
 }
----
+
 // ── French TEF Canada — data layer ──────────────────────────────
 
 export const FRENCH_MODES = [
