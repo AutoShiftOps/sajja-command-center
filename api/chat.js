@@ -1,22 +1,24 @@
 /**
- * /api/chat — Vercel serverless proxy for Anthropic API
+ * /api/chat — Vercel serverless proxy
  *
- * Keeps ANTHROPIC_API_KEY server-side only.
- * Called by FrenchWorkspace.jsx as POST /api/chat
+ * Uses Groq's free API (OpenAI-compatible) with Llama 3.1 70B.
+ * Keeps GROQ_API_KEY server-side only.
  *
- * Body: { system: string, messages: [{role, content}] }
+ * Get free key at: console.groq.com (no credit card needed)
+ *
+ * Body:    { system: string, messages: [{role, content}] }
  * Returns: { text: string } or { error: string }
  */
 
-export const config = { runtime: 'edge' }   // Edge runtime = fastest cold start on Vercel
+export const config = { runtime: 'edge' }
 
 export default async function handler(req) {
-  // ── CORS preflight ───────────────────────────────────────────
+  // ── CORS preflight ────────────────────────────────────────
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin':  '*',
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
@@ -30,12 +32,12 @@ export default async function handler(req) {
     })
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured on server' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({ error: 'GROQ_API_KEY not configured — add it in Vercel environment variables' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
   }
 
   let body
@@ -56,51 +58,55 @@ export default async function handler(req) {
     })
   }
 
-  // ── Forward to Anthropic ─────────────────────────────────────
+  // Groq uses OpenAI-compatible format — system goes as first message
+  const groqMessages = [
+    { role: 'system', content: system || '' },
+    ...messages,
+  ]
+
   try {
-    const anthropicResp = await fetch('https://api.anthropic.com/v1/messages', {
+    const groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model:      'claude-sonnet-4-6',
+        model: 'llama-3.1-70b-versatile',  // Best free model on Groq for French coaching
         max_tokens: 800,
-        system:     system || '',
-        messages,
+        temperature: 0.7,
+        messages: groqMessages,
       }),
     })
 
-    if (!anthropicResp.ok) {
-      const errText = await anthropicResp.text()
-      return new Response(JSON.stringify({ error: `Anthropic error: ${anthropicResp.status} — ${errText}` }), {
-        status: anthropicResp.status,
-        headers: {
-          'Content-Type':                'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-      })
+    if (!groqResp.ok) {
+      const errText = await groqResp.text()
+      return new Response(
+        JSON.stringify({ error: `Groq error ${groqResp.status}: ${errText}` }),
+        {
+          status: groqResp.status,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        }
+      )
     }
 
-    const data = await anthropicResp.json()
-    const text = data.content?.[0]?.text || ''
+    const data = await groqResp.json()
+    const text = data.choices?.[0]?.message?.content || 'No response from model'
 
     return new Response(JSON.stringify({ text }), {
       status: 200,
       headers: {
-        'Content-Type':                'application/json',
+        'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: `Proxy error: ${err.message}` }), {
-      status: 500,
-      headers: {
-        'Content-Type':                'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    })
+    return new Response(
+      JSON.stringify({ error: `Proxy error: ${err.message}` }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      }
+    )
   }
 }
