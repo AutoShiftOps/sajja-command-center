@@ -133,13 +133,16 @@ function Coach({ fr, actions }) {
     setConvos(p=>({...p,[modeId]:updated}))
     setLoading(true)
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,system:SYSTEM_PROMPTS[modeId],messages:updated.map(({role,content})=>({role,content}))}),
+      const resp = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          system:   SYSTEM_PROMPTS[modeId],
+          messages: updated.map(({ role, content }) => ({ role, content })),
+        }),
       })
       const data  = await resp.json()
-      const reply = data.content?.[0]?.text||'Error: no response'
+      const reply = data.text || data.error || 'Error: no response'
       const coach = {role:'assistant',content:reply,time:new Date().toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'})}
       const final = [...updated,coach]
       setConvos(p=>({...p,[modeId]:final}))
@@ -150,7 +153,6 @@ function Coach({ fr, actions }) {
     setLoading(false)
     inputRef.current?.focus()
   }
-
   const STARTERS = {vocab:'Start my vocabulary drill',grammar:'Start my grammar drill — you choose the tense',speaking:"Give me today's speaking question",listening:'Give me my first listening passage',mock:'Start my TEF Canada mock exam'}
   const QUICK = {
     vocab:    ['Next word →','Repeat this word','Use it in a sentence','Harder words please'],
@@ -159,7 +161,6 @@ function Coach({ fr, actions }) {
     listening:['Next passage →','Repeat the passage','Explain a word','Harder passage'],
     mock:     ['Next prompt →','Score my response','Model answer please','What CLB am I at?'],
   }
-
   return (
     <div style={{display:'flex',gap:16,height:'calc(100vh - 195px)',minHeight:480}}>
       <div style={{width:155,flexShrink:0,display:'flex',flexDirection:'column',gap:8}}>
@@ -182,7 +183,6 @@ function Coach({ fr, actions }) {
           </div>
         </div>
       </div>
-
       <div style={{flex:1,display:'flex',flexDirection:'column',border:'1px solid var(--border)',borderRadius:12,overflow:'hidden',background:'var(--surface2)'}}>
         <div style={{padding:'11px 16px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--surface3)'}}>
           <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -197,7 +197,6 @@ function Coach({ fr, actions }) {
             : <Btn onClick={()=>setConvos(p=>({...p,[modeId]:[]}))} variant="outline" style={{fontSize:11,padding:'5px 11px',color:'var(--muted)'}}>New session</Btn>
           }
         </div>
-
         <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
           {msgs.length===0?(
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:10,textAlign:'center'}}>
@@ -231,7 +230,6 @@ function Coach({ fr, actions }) {
           )}
           <div ref={bottomRef}/>
         </div>
-
         {msgs.length>0&&(
           <div style={{padding:'7px 11px',borderTop:'1px solid var(--border)',display:'flex',gap:5,flexWrap:'wrap',background:'var(--surface3)'}}>
             {(QUICK[modeId]||[]).map(a=>(
@@ -239,7 +237,6 @@ function Coach({ fr, actions }) {
             ))}
           </div>
         )}
-
         <div style={{padding:'9px 13px 11px',borderTop:'1px solid var(--border)',display:'flex',gap:8,background:'var(--surface3)'}}>
           <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()} disabled={loading}
             placeholder={modeId==='vocab'?'Type the French word back...':modeId==='grammar'?'Fill in the blank...':modeId==='listening'?'Answer in English...':'Type in French...'}
@@ -251,7 +248,6 @@ function Coach({ fr, actions }) {
     </div>
   )
 }
-
 function Tasks({ fr, actions, doneTasks }) {
   return (
     <>
@@ -265,7 +261,6 @@ function Tasks({ fr, actions, doneTasks }) {
     </>
   )
 }
-
 function SessionLog({ fr }) {
   const sessions = fr.sessions||[]
   return (
@@ -297,7 +292,6 @@ function SessionLog({ fr }) {
     </>
   )
 }
-
 function Plan({ fr, actions }) {
   const planDays = fr.planDays||[]
   const phases = [
