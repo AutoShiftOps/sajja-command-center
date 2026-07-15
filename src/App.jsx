@@ -16,8 +16,8 @@ export default function App() {
       dbStatus={dbStatus}
       dbMessage={dbMessage}
     >
-      {state.workspace === 'eb1a' && <EB1AWorkspace state={state} actions={actions} />}
-      {state.workspace === 'dm' && <DMWorkspace state={state} actions={actions} />}
+      {state.workspace === 'eb1a'   && <EB1AWorkspace   state={state} actions={actions} />}
+      {state.workspace === 'dm'     && <DMWorkspace     state={state} actions={actions} />}
       {state.workspace === 'french' && <FrenchWorkspace state={state} actions={actions} />}
     </Layout>
   )
