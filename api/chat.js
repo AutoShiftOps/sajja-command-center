@@ -72,7 +72,7 @@ export default async function handler(req) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',  // Best free model on Groq for French coaching
+        model: 'openai/gpt-oss-120b',  // Best free model on Groq for French coaching
         max_tokens: 800,
         temperature: 0.7,
         messages: groqMessages,
